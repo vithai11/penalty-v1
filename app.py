@@ -6,7 +6,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import LabelEncoder
 
 st.set_page_config(page_title="AI Dự đoán hướng sút", layout="centered")
-st.title("⚽ AI Dự Đoán Hướng Sút - Random Forest Tối Ưu Hóa")
+st.title("⚽ AI Dự Đoán Hướng Sút - Phiên Bản Nâng Cấp")
 
 # Khởi tạo session
 if "kick_history" not in st.session_state:
@@ -22,13 +22,9 @@ if "kick_history" not in st.session_state:
     st.session_state.prediction_result = ""
     st.session_state.pending_direction = None
 
-# Gợi ý từ AI cho lượt tiếp theo
+# Hàm dự đoán thông minh
 def smart_kick_rf():
     if len(st.session_state.kick_history) < 4:
-        return random.choice(["left", "center", "right"]), []
-
-    min_samples = 2
-    if len(st.session_state.kick_history) - min_samples < 2:
         return random.choice(["left", "center", "right"]), []
 
     last_kick = st.session_state.kick_history[-1]
@@ -37,14 +33,19 @@ def smart_kick_rf():
 
     try:
         probs = st.session_state.model.predict_proba(input_feature)[0]
-        max_index = np.argmax(probs)
-        likely_jump = st.session_state.encoder.inverse_transform([max_index])[0]
-        options = {"left", "center", "right"} - {likely_jump}
-        return random.choice(list(options)), probs
+        directions = ["left", "center", "right"]
+        sorted_dirs = sorted(zip(directions, probs), key=lambda x: x[1], reverse=True)
+
+        # Tránh hướng thủ môn có xác suất cao nhất
+        avoid_dir = sorted_dirs[0][0]
+        possible_shots = [d for d in directions if d != avoid_dir]
+        ai_kick = random.choice(possible_shots)
+
+        return ai_kick, probs
     except:
         return random.choice(["left", "center", "right"]), []
 
-# 1. Chọn hướng sút
+# 1. Người chơi chọn hướng sút
 st.markdown("### 1. Bạn chọn hướng sút:")
 cols = st.columns(3)
 direction = None
@@ -74,9 +75,11 @@ if st.session_state.pending_direction:
         kick_num = st.session_state.encoder.transform([st.session_state.pending_direction])[0]
         goalie_num = st.session_state.encoder.transform([goalie_dir])[0]
 
+        # Lưu lịch sử
         st.session_state.kick_history.append(kick_num)
         st.session_state.goalie_jump_history.append(goalie_num)
 
+        # Kết quả
         if st.session_state.pending_direction == goalie_dir:
             st.session_state.result = f"❌ Bị bắt! Thủ môn nhảy đúng hướng: {goalie_dir}"
             st.session_state.prediction_result = "Sai dự đoán"
@@ -108,23 +111,23 @@ if st.session_state.result:
     st.info(st.session_state.result)
     st.markdown(f"**Dự đoán của AI:** {st.session_state.prediction_result}")
 
-# Gợi ý cho lượt sau
+# Gợi ý từ AI
 st.markdown("---")
 st.subheader("Gợi ý từ AI (cho lượt kế tiếp):")
 if st.session_state.ai_suggestion:
     st.success(f"**Nên sút về: {st.session_state.ai_suggestion.upper()}**")
-    if 'probs' in locals() and len(probs) == 3:
-        st.write("**Xác suất thủ môn nhảy theo các hướng:**")
+    if 'probs' in locals() and probs:
+        st.write(f"**Xác suất thủ môn nhảy theo các hướng:**")
         st.write(f"🔹 Trái: {probs[0] * 100:.2f}%")
         st.write(f"🔹 Giữa: {probs[1] * 100:.2f}%")
         st.write(f"🔹 Phải: {probs[2] * 100:.2f}%")
 
-# Tỷ lệ thành công
+# Tỷ lệ ghi bàn
 if st.session_state.total_shots > 0:
     acc = 100 * st.session_state.success_count / st.session_state.total_shots
     st.markdown(f"**Tỷ lệ sút thành công:** `{acc:.2f}%`")
 
-# Lịch sử lượt chơi
+# Lịch sử
 st.markdown("### Lịch sử lượt chơi:")
 if st.session_state.kick_history:
     st.write("Hướng sút:", list(st.session_state.encoder.inverse_transform(st.session_state.kick_history)))
@@ -132,7 +135,7 @@ if st.session_state.kick_history:
 else:
     st.write("*Chưa có dữ liệu.*")
 
-# Reset game
+# Nút reset
 if st.button("🔄 Reset game"):
     st.session_state.kick_history.clear()
     st.session_state.goalie_jump_history.clear()
